@@ -2,7 +2,7 @@
 
 A complete implementation of the Nand2Tetris curriculum in C and HDL, built to answer a specific question: **how does a computing platform actually come into being?**
 
-Every layer of this project was implemented by hand — from boolean logic gates through to a working VM translator capable of executing programs written in a high-level language. No shortcuts, no standard library substitutes for the interesting parts.
+Every layer of this project was implemented by hand — from boolean logic gates through to a working compiler for a high-level object-oriented language. No shortcuts, no standard library substitutes for the interesting parts.
 
 ---
 
@@ -19,6 +19,7 @@ Every layer of this project was implemented by hand — from boolean logic gates
 | VM Translator | Stack-based bytecode to assembly translator | C |
 | Jack Tokenizer | Lexical analyser — source text to typed token stream | C |
 | Jack Parser | Recursive descent parser with XML parse tree output | C |
+| Jack Compiler | Full code generation — Jack source to VM bytecode | C |
 
 All modules tested and passing against the provided test suites.
 
@@ -119,17 +120,17 @@ Both chapters reviewed by CodeRabbit on submission:
 
 ---
 
-## Jack Compiler — Chapter 10: Tokenizer and Parser (C Implementation)
+## Jack Compiler — Chapters 10 and 11 (C Implementation)
 
-Chapter 10 implements the front end of a full compiler for the Jack language — the two stages that transform raw source text into a structured representation the code generator can consume: lexical analysis and syntactic analysis.
+A complete compiler for the Jack language, implemented in C across two chapters. Chapter 10 built the front end — lexical analysis and parsing. Chapter 11 added the back end — symbol resolution and VM code generation. The compiler drives two output streams simultaneously: an XML parse tree for structural verification and VM bytecode for execution.
 
-### Pipeline Position
+### Pipeline
 
 ```
-.jack source → tokenizer → token stream → parser → parse tree → (code generation)
+.jack source → tokenizer → token stream → parser → parse tree + VM code
 ```
 
-The tokenizer and parser are strictly separated. The tokenizer's only job is to produce a flat, typed token stream from source text. The parser's only job is to impose grammatical structure on that stream. Neither stage reaches into the other's domain.
+The tokenizer and parser are strictly separated. The tokenizer's only job is to produce a flat, typed token stream from source text. The parser's only job is to impose grammatical structure on that stream and drive code generation. Neither stage reaches into the other's domain.
 
 ### Tokenizer
 
@@ -147,15 +148,48 @@ The tokenizer consumes a Jack source file and produces a flat array of typed tok
 
 A hand-written recursive descent parser structured directly from the Jack grammar. Each non-terminal in the grammar maps to a function; each function consumes exactly the tokens its production covers and returns, leaving the stream positioned at the first token of whatever follows.
 
-The parser's output for Chapter 10 is an XML parse tree — a faithful structural rendering of the grammar that the test suite validates against. Every grammar rule is visible in the output: terminals emit their token type and value, non-terminals wrap their children in named tags. This makes the parse tree a direct audit trail of the grammar being applied.
-
-**Recursive descent over the Jack grammar** is mechanically straightforward given the language's LL(1) character — Jack is designed to be parsed with one token of lookahead, and the grammar has no left recursion. The work is in applying the grammar rules precisely and handling every production's boundary conditions correctly.
-
 **Error handling** follows the same fail-fast discipline as the rest of the pipeline. A token that does not match the expected terminal exits immediately with the offending token, its position, and what was expected. The parser never attempts recovery or continuation past a structural mismatch.
 
-### Infrastructure Continuity
+### Symbol Table
 
-The tokenizer reuses the string library and dynamic array patterns established during the VM translator. The character classification table, slice-based representation, and anchor/scout scan idiom are direct extensions of the same design principles — the infrastructure grew to cover a new domain without requiring new strategies.
+Two-scope flat array model: `ClassTable` (field/static) and `SubTable` (argument/local), each a fixed array of entry structs with slice-based name and type fields — pointer and length into the source buffer, consistent with the tokenizer's representation throughout. Separate per-kind counters assign VM segment indices at insertion time.
+
+Both lookup functions iterate from the most recently inserted entry backwards — variables declared closest to the point of use are found first on average, reducing comparisons in the common case. Lookup is subroutine-scope-first, falling through to class scope on a miss. A NULL return at a subroutine call site indicates a class name rather than a variable reference.
+
+Linear search over the flat array is deliberate — Jack's scope sizes make hashing unnecessary overhead. A subroutine symbol table large enough to require hashing would indicate a poorly structured subroutine.
+
+### Code Generation
+
+**Subroutine kind handling** — the subroutine kind (constructor/method/function) is captured into `ParserState` before parsing the keyword. The `function` declaration is deferred until all `varDec` parsing completes so that `local_count` is final. The preamble then diverges by kind:
+
+- Constructor: `push field_count`, `call Memory.alloc 1`, `pop pointer 0`
+- Method: `push argument 0`, `pop pointer 0`
+- Function: no preamble
+
+For methods, a hidden `this` entry is inserted into the subroutine table before parameter parsing so explicit parameters receive correct indices from 1.
+
+**Expression code generation** — `compileExpression` holds the binary operator in a temporary after consuming it, compiles the right-hand term, then emits the operator. Postfix ordering falls out of the recursive call structure without any explicit reordering.
+
+**`compileTerm`** handles all term forms: integer and string constants, keyword constants (`null`/`false` → `push constant 0`; `true` → `push constant 0` / `not`; `this` → `push pointer 0`), plain variable lookup, array access, subroutine calls in all three forms, unary operators, and parenthesised expressions. Every branch either emits correct VM code or terminates with a diagnostic — no silent fallthrough.
+
+**Array assignment** uses a temp register to preserve the RHS value across the `pointer 1` assignment: push base address, compile index, `add`, compile RHS, `pop temp 0`, `pop pointer 1`, `push temp 0`, `pop that 0`.
+
+**Label generation** — `compileIf` and `compileWhile` each reserve two indices from a persistent `label_count` in `ParserState` at function entry, before any recursive `compileStatements` call. Both labels are allocated upfront so nested constructs consume indices beyond them, eliminating collisions under arbitrary nesting depth.
+
+**Void return** — `compileReturn` pushes `constant 0` before emitting `return` when the next token is `;`. `compileDo` pops the discarded return value into `temp 0` after every subroutine call to keep the stack balanced.
+
+**`emit_push` / `emit_pop`** centralise the kind-to-segment mapping: `T_STATIC` → `static`, `T_FIELD` → `this`, `T_ARG` → `argument`, `T_VAR` → `local`.
+
+### Tests Passing
+
+Single-file: Average, Seven, ConvertToBin, ComplexArrays. Multi-file: Pong — verified in the VM emulator with directory load.
+
+### Code Review
+
+Chapters 10 and 11 reviewed by CodeRabbit on submission:
+- **Complexity rating: 4 (Complex)** — consistent across both chapters
+- Estimated review effort: ~50 minutes per chapter
+- Issues found: targeted mechanical findings, no architectural concerns raised
 
 ---
 
@@ -165,7 +199,7 @@ The tokenizer reuses the string library and dynamic array patterns established d
 nand2tetris/
 ├── part_I/
 │   ├── chapter_01/     — Boolean Logic
-│   ├── chapter_02/     — Boolean Arithmetic  
+│   ├── chapter_02/     — Boolean Arithmetic
 │   ├── chapter_03/     — Sequential Logic
 │   ├── chapter_04/     — Machine Language
 │   ├── chapter_05/     — Computer Architecture
@@ -173,9 +207,11 @@ nand2tetris/
 └── part_II/
     ├── chapter_07/     — VM Translator Part I (C)
     ├── chapter_08/     — VM Translator Part II (C)
-    └── chapter_10/     — Jack Tokenizer and Parser (C)
+    ├── chapter_10/     — Jack Tokenizer and Parser (C)
+    └── chapter_11/     — Jack Compiler Back-End (C)
 ```
 
+Each chapter directory contains its own README with implementation notes, design decisions, and test results.
 
 ---
 
@@ -185,3 +221,5 @@ nand2tetris/
 - Bryant & O'Hallaron — *Computer Systems: A Programmer's Perspective* (CS:APP)
 - Kernighan & Ritchie — *The C Programming Language* (K&R 2nd edition)
 - Petzold — *Code: The Hidden Language of Computer Hardware and Software*
+- Bentley — *Programming Pearls*
+- Skiena — *The Algorithm Design Manual*
