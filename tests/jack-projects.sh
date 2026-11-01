@@ -5,15 +5,32 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tools_dir=${N2T_TOOLS_DIR:-}
 projects_dir=${N2T_PROJECTS_DIR:-}
 
+resolve_project_dir() {
+  local base_dir=$1
+  local project_number=$2
+  local candidate
+
+  for candidate in \
+    "$base_dir/$project_number" \
+    "$base_dir/$(printf '%02d' "$project_number")"; do
+    if [[ -d "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 if [[ ! -f "$tools_dir/TextComparer.sh" || ! -f "$tools_dir/VMEmulator.sh" ]]; then
   printf 'Set N2T_TOOLS_DIR to the native nand2tetris tools directory.\n' >&2
   exit 2
 fi
 
-if [[ ! -d "$projects_dir/11" ]]; then
+project11_dir=$(resolve_project_dir "$projects_dir" 11) || {
   printf 'Set N2T_PROJECTS_DIR to the official projects checkout.\n' >&2
   exit 2
-fi
+}
 
 work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
@@ -72,12 +89,12 @@ for fixture in \
 done
 
 for fixture in \
-  "$projects_dir/11/Average" \
-  "$projects_dir/11/ComplexArrays" \
-  "$projects_dir/11/ConvertToBin" \
-  "$projects_dir/11/Pong" \
-  "$projects_dir/11/Seven" \
-  "$projects_dir/11/Square"; do
+  "$project11_dir/Average" \
+  "$project11_dir/ComplexArrays" \
+  "$project11_dir/ConvertToBin" \
+  "$project11_dir/Pong" \
+  "$project11_dir/Seven" \
+  "$project11_dir/Square"; do
   run_compiler_fixture "$fixture"
 done
 
