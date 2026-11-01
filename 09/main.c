@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 
 #include "parser.h"
-#include "symbol_table.h"
 
 int is_jack_file(const char *filename) {
   size_t len = strlen(filename);
@@ -72,9 +71,7 @@ void compile_single_file(const char *input_path, const char *base_name) {
 
   /* Construct both output paths from the base name (no extension) */
   char xml_path[1024];
-  char vm_path[1024];
   snprintf(xml_path, sizeof(xml_path), "%s.xml", base_name);
-  snprintf(vm_path, sizeof(vm_path), "%s.vm", base_name);
 
   FILE *xml_out = fopen(xml_path, "w");
   if (!xml_out) {
@@ -84,40 +81,16 @@ void compile_single_file(const char *input_path, const char *base_name) {
     exit(EXIT_FAILURE);
   }
 
-  FILE *vm_out = fopen(vm_path, "w");
-  if (!vm_out) {
-    fprintf(stderr, "Fatal Error: Could not open output file %s\n", vm_path);
-    fclose(xml_out);
-    free(table.tokens);
-    free(source_buffer);
-    exit(EXIT_FAILURE);
-  }
-
-  ClassTable class_table;
-  SubTable sub_table;
-  init_class_table(&class_table);
-  init_sub_table(&sub_table);
-
   ParserState p;
   p.table = &table;
   p.current = 0;
   p.out = xml_out;
-  p.vm_out = vm_out;
-  p.classname = NULL;
-  p.classname_length = 0;
-  p.subroutine_name = NULL;
-  p.subroutine_name_length = 0;
-  p.subroutine_kind = SK_FUNCTION;
-  p.class_table = &class_table;
-  p.sub_table = &sub_table;
-  p.label_count = 0;
 
-  printf("Compiling: %s -> %s, %s\n", input_path, xml_path, vm_path);
+  printf("Parsing: %s -> %s\n", input_path, xml_path);
 
   parser(&p, source_buffer);
 
   fclose(xml_out);
-  fclose(vm_out);
   free(table.tokens);
   free(source_buffer);
 }

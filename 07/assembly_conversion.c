@@ -170,7 +170,7 @@ void write_base_pointer(FILE* out, CommandType type, char* segment, int* index) 
 			*index, base);
 	}
 	else {
-		fprintf("Error: unexpected segment '%s' in write_base_pointer\n", segment);
+		fprintf(stderr, "Error: unexpected segment '%s' in write_base_pointer\n", segment);
 		exit(EXIT_FAILURE);
 	}
 }

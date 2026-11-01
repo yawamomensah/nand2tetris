@@ -1,5 +1,7 @@
 # Nand2Tetris — Building a Computing Platform from First Principles
 
+[![Native Nand2Tetris Tests](https://github.com/yawamomensah/nand2tetris/actions/workflows/jack-tests.yml/badge.svg)](https://github.com/yawamomensah/nand2tetris/actions/workflows/jack-tests.yml)
+
 A complete implementation of the Nand2Tetris curriculum in C and HDL, built to answer a specific question: **how does a computing platform actually come into being?**
 
 Every layer of this project was implemented by hand — from boolean logic gates through to a working compiler for a high-level object-oriented language. No shortcuts, no standard library substitutes for the interesting parts.

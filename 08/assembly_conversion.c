@@ -42,8 +42,8 @@ void write_memory_access(FILE* out, CommandType type, char* segment, int* index,
 			fprintf(stderr, "pointer index out of range: %d\n", *index);
 			exit(EXIT_FAILURE);
 		}
-	}
 		write_fixed_base(out, type, index, "3");
+	}
 	else if (strcmp(segment, "local") == 0 ||
 			 strcmp(segment, "argument") == 0 ||
 			 strcmp(segment, "this") == 0 ||

@@ -1,5 +1,8 @@
 #include "parse_c_instr.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 void parse_c_intruction(char *line, char **dest, char **comp, char **jump) {
 	*dest = "null";
 	*jump = "null";

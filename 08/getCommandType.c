@@ -53,7 +53,7 @@ void getCommand(TokenizedLine info, FILE* out, int* counter, int* n_args, char* 
 				fprintf(stderr, "Error: function name too long\n");
 				exit(EXIT_FAILURE);
 			}
-			memcpy(function_name, info.tokens[1], n + 1);
+			memcpy(function_name, info.tokens[1], size + 1);
 			*n_args = string_to_int(info.tokens[2]);
 			if (*n_args < 0) {
 			    fprintf(stderr, "function local count must be non-negative\n");
