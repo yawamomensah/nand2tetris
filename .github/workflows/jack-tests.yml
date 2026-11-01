@@ -37,11 +37,14 @@ jobs:
           git -C "$RUNNER_TEMP/official-projects" fetch --quiet --depth 1 origin 5bd2184edfd4945ff8a28eb0b237c12cdbe9e498
           git -C "$RUNNER_TEMP/official-projects" checkout --quiet --detach FETCH_HEAD
           git -C "$RUNNER_TEMP/official-projects" sparse-checkout init --cone
-          git -C "$RUNNER_TEMP/official-projects" sparse-checkout set projects/04 projects/06 projects/07 projects/08 projects/09 projects/11
+          git -C "$RUNNER_TEMP/official-projects" sparse-checkout set projects/01 projects/02 projects/03 projects/04 projects/05 projects/06 projects/07 projects/08 projects/09 projects/11
           echo "N2T_PROJECTS_DIR=$RUNNER_TEMP/official-projects/projects" >> "$GITHUB_ENV"
 
       - name: Test assembler and VM translators
         run: tests/assembly-vm-tests.sh
+
+      - name: Test HDL hardware modules
+        run: tests/hardware-tests.sh
 
       - name: Test Jack parser and compiler
         run: tests/jack-projects.sh

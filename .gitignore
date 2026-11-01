@@ -1,0 +1,4 @@
+# Generated test output
+*.out
+*.out.*
+check.PNG
