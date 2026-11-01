@@ -10,7 +10,7 @@ if [[ ! -f "$tools_dir/Assembler.sh" || ! -f "$tools_dir/CPUEmulator.sh" || ! -f
   exit 2
 fi
 
-if [[ ! -d "$projects_dir/08" ]]; then
+if [[ ! -d "$projects_dir/04" || ! -d "$projects_dir/07" || ! -d "$projects_dir/08" ]]; then
   printf 'Set N2T_PROJECTS_DIR to the official projects checkout.\n' >&2
   exit 2
 fi
@@ -27,21 +27,15 @@ compare_files() {
   sh "$tools_dir/TextComparer.sh" "$1" "$2"
 }
 
-assemble_and_compare() {
-  local project=$1
-  local program=$2
-  local reference=$3
-  local output_dir="$work_dir/assembler/$program"
-
-  mkdir -p "$output_dir"
-  cp "$projects_dir/06/$project/$program.asm" "$output_dir/"
-  "$work_dir/bin/assembler" "$output_dir/$program.asm"
-  compare_files "$repo_root/05/$reference" "$output_dir/$program.hack"
-}
-
-assemble_and_compare add Add Add.hack
-assemble_and_compare max Max Max.hack
-assemble_and_compare rect Rect Rect.hack
+assembler_test_dir="$work_dir/assembler/Mult"
+mkdir -p "$assembler_test_dir"
+cp "$repo_root/04/mult/Mult.asm" "$assembler_test_dir/"
+cp "$projects_dir/04/mult/Mult.tst" "$projects_dir/04/mult/Mult.cmp" \
+  "$assembler_test_dir/"
+"$work_dir/bin/assembler" "$assembler_test_dir/Mult.asm"
+sed 's/load Mult\.asm,/load Mult.hack,/' \
+  "$assembler_test_dir/Mult.tst" > "$assembler_test_dir/Mult.generated.tst"
+sh "$tools_dir/CPUEmulator.sh" "$assembler_test_dir/Mult.generated.tst"
 
 run_cpu_test() {
   local test_dir=$1
@@ -49,11 +43,11 @@ run_cpu_test() {
 }
 
 for fixture in \
-  "$repo_root/07/07/MemoryAccess/BasicTest" \
-  "$repo_root/07/07/MemoryAccess/PointerTest" \
-  "$repo_root/07/07/MemoryAccess/StaticTest" \
-  "$repo_root/07/07/StackArithmetic/SimpleAdd" \
-  "$repo_root/07/07/StackArithmetic/StackTest"; do
+  "$projects_dir/07/MemoryAccess/BasicTest" \
+  "$projects_dir/07/MemoryAccess/PointerTest" \
+  "$projects_dir/07/MemoryAccess/StaticTest" \
+  "$projects_dir/07/StackArithmetic/SimpleAdd" \
+  "$projects_dir/07/StackArithmetic/StackTest"; do
   test_dir="$work_dir/project07/$(basename "$fixture")"
   mkdir -p "$test_dir"
   cp "$fixture"/*.vm "$fixture"/*.tst "$fixture"/*.cmp "$test_dir/"

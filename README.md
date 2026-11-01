@@ -23,7 +23,7 @@ Every layer of this project was implemented by hand — from boolean logic gates
 | Jack Parser | Recursive descent parser with XML parse tree output | C |
 | Jack Compiler | Full code generation — Jack source to VM bytecode | C |
 
-All modules tested and passing against the provided test suites.
+The native CI workflow uses the supplied course fixtures where available. It compares Project 10 tokenizer/parser output and executes Project 11's official `Seven` program in the VM Emulator with the official OS files as fallback. Generated VM labels are not compared.
 
 ---
 

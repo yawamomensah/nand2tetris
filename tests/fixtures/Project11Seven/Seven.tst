@@ -1,0 +1,6 @@
+load,
+output-file Seven.out,
+compare-to Seven.cmp,
+output-list RAM[16416]%D1.16.1 RAM[16448]%D1.16.1 RAM[16480]%D1.16.1 RAM[16512]%D1.16.1 RAM[16544]%D1.16.1 RAM[16576]%D1.16.1 RAM[16608]%D1.16.1 RAM[16640]%D1.16.1 RAM[16672]%D1.16.1 RAM[16704]%D1.16.1 RAM[16736]%D1.16.1 RAM[16768]%D1.16.1;
+repeat 10000000 { vmstep; }
+output;

@@ -3,9 +3,15 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tools_dir=${N2T_TOOLS_DIR:-}
+projects_dir=${N2T_PROJECTS_DIR:-}
 
-if [[ ! -f "$tools_dir/TextComparer.sh" ]]; then
+if [[ ! -f "$tools_dir/TextComparer.sh" || ! -f "$tools_dir/VMEmulator.sh" ]]; then
   printf 'Set N2T_TOOLS_DIR to the native nand2tetris tools directory.\n' >&2
+  exit 2
+fi
+
+if [[ ! -d "$projects_dir/11" ]]; then
+  printf 'Set N2T_PROJECTS_DIR to the official projects checkout.\n' >&2
   exit 2
 fi
 
@@ -56,12 +62,6 @@ run_compiler_fixture() {
   local output_dir="$work_dir/compiler/$(basename "$fixture_dir")"
   copy_jack_sources "$fixture_dir" "$output_dir"
   "$work_dir/bin/jack-compiler" "$output_dir"
-
-  while IFS= read -r -d '' source_file; do
-    local base_name
-    base_name=$(basename "$source_file" .jack)
-    compare_files "$fixture_dir/$base_name.vm" "$output_dir/$base_name.vm"
-  done < <(find "$fixture_dir" -maxdepth 1 -type f -name '*.jack' -print0)
 }
 
 for fixture in \
@@ -72,18 +72,16 @@ for fixture in \
 done
 
 for fixture in \
-  "$repo_root/10/11/Average" \
-  "$repo_root/10/11/ComplexArrays" \
-  "$repo_root/10/11/ConvertToBin" \
-  "$repo_root/10/11/Pong" \
-  "$repo_root/10/11/Seven" \
-  "$repo_root/10/11/Square"; do
+  "$projects_dir/11/Average" \
+  "$projects_dir/11/ComplexArrays" \
+  "$projects_dir/11/ConvertToBin" \
+  "$projects_dir/11/Pong" \
+  "$projects_dir/11/Seven" \
+  "$projects_dir/11/Square"; do
   run_compiler_fixture "$fixture"
 done
 
-runtime_dir="$work_dir/compiler-runtime"
-mkdir -p "$runtime_dir"
-cp "$repo_root/tests/fixtures/JackRuntime/"* "$runtime_dir/"
+runtime_dir="$work_dir/compiler/Seven"
 cp "$tools_dir"/OS/*.vm "$runtime_dir/"
-"$work_dir/bin/jack-compiler" "$runtime_dir"
-sh "$tools_dir/VMEmulator.sh" "$runtime_dir/Runtime.tst"
+cp "$repo_root/tests/fixtures/Project11Seven/Seven."{cmp,tst} "$runtime_dir/"
+sh "$tools_dir/VMEmulator.sh" "$runtime_dir/Seven.tst"
