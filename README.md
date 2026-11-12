@@ -184,9 +184,9 @@ For methods, a hidden `this` entry is inserted into the subroutine table before 
 
 ### Tests Passing
 
-Single-file: Average, Seven, ConvertToBin, ComplexArrays. Multi-file: Pong — verified in the VM emulator with directory load.
+Single-file: Average, Seven, ConvertToBin, ComplexArrays. Multi-file: Pong — verified in the VM emulator with directory load. The screenshot below shows the compiled Pong game running in the emulator, demonstrating that the compiler, VM translator, assembler, CPU, and screen output work together as a toolchain.
 
-![Pong running](./pong-running.svg)
+![Pong running in the Hack emulator](./Pong.PNG)
 
 ### Code Review
 
