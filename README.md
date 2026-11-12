@@ -4,7 +4,7 @@
 
 A complete implementation of the Nand2Tetris curriculum in C and HDL, built to answer a specific question: **how does a computing platform actually come into being?**
 
-Every layer of this project was implemented by hand — from boolean logic gates through to a working compiler for a high-level object-oriented language. No shortcuts, no standard library substitutes for the interesting parts.
+Every layer of this project was implemented by hand — from boolean logic gates through to a working compiler for a high-level object-oriented language. No shortcuts, no standard library substitutions, no external code generation. The result is a complete stack that begins with NAND gates and ends with a compiled program running in a simulated Hack environment.
 
 ---
 
@@ -23,13 +23,13 @@ Every layer of this project was implemented by hand — from boolean logic gates
 | Jack Parser | Recursive descent parser with XML parse tree output | C |
 | Jack Compiler | Full code generation — Jack source to VM bytecode | C |
 
-The native CI workflow uses the supplied course fixtures where available. It compares Project 10 tokenizer/parser output and executes Project 11's official `Seven` program in the VM Emulator with the official OS files as fallback. Generated VM labels are not compared.
+The native CI workflow uses the supplied course fixtures where available. It compares Project 10 tokenizer/parser output and executes Project 11's official `Seven` program in the VM Emulator with the native Nand2Tetris tools.
 
 ---
 
 ## The Intellectual Arc
 
-What became clear building each layer is that **constraints are not obstacles to elegant solutions — they are the source of them**. The Hack architecture's minimal instruction set forces you to express complex operations through careful sequencing of simple primitives. The VM's flat global stack turns out to be sufficient substrate for arbitrarily nested function calls. Each layer's limitations shaped the design of the layer above it in ways that feel inevitable in retrospect.
+What became clear building each layer is that **constraints are not obstacles to elegant solutions — they are the source of them**. The Hack architecture's minimal instruction set forces you to understand abstractions at a much deeper level. You do not just assemble instructions; you have to reason about the machine model itself.
 
 This isn't something you understand by reading about it. It becomes visible when you implement it.
 
@@ -41,7 +41,7 @@ A two-pass assembler that translates Hack assembly into binary machine code.
 
 **First pass** — scans the source file building a symbol table of label declarations and their ROM addresses using a custom djb2 hash table with chaining.
 
-**Second pass** — translates each instruction, resolving symbols through the table built in the first pass. A-instructions become 16-bit values, C-instructions are encoded by decomposing their dest/comp/jump fields against a lookup table.
+**Second pass** — translates each instruction, resolving symbols through the table built in the first pass. A-instructions become 16-bit values, C-instructions are encoded by decomposing their destination, computation, and jump fields into the correct bit patterns.
 
 **Infrastructure built from scratch:**
 - djb2 hash table with chaining for O(1) symbol lookup
@@ -52,7 +52,7 @@ A two-pass assembler that translates Hack assembly into binary machine code.
 
 ## VM Translator — C Implementation
 
-A complete two-tier VM translator covering the full Hack VM specification across chapters 7 and 8. Translates stack-based VM bytecode into Hack assembly, implementing the virtual machine's execution model entirely in generated assembly code.
+A complete two-tier VM translator covering the full Hack VM specification across chapters 7 and 8. Translates stack-based VM bytecode into Hack assembly, implementing the virtual machine's execution model from the ground up.
 
 ### Pipeline Architecture
 
@@ -60,15 +60,15 @@ A complete two-tier VM translator covering the full Hack VM specification across
 raw line → strip → tokenize → lookup → dispatch → codewriter → .asm output
 ```
 
-Each stage has a single responsibility and a clean contract with the next. The pipeline requires zero structural modification between chapter 7 and chapter 8 — new commands are added to the lookup table and new codewriter functions handle them. The architecture absorbed the extension without resistance.
+Each stage has a single responsibility and a clean contract with the next. The pipeline requires zero structural modification between chapter 7 and chapter 8 — new commands are added to the lookup table and code writer without disturbing the surrounding architecture.
 
 ### Custom Infrastructure
 
-**String library** — hand-written string utilities including `strip` (in-place whitespace and comment removal via `memmove`) and a custom tokenizer using an anchor/scout two-pointer strategy with `reached_end` boundary handling for correct final token capture.
+**String library** — hand-written string utilities including `strip` (in-place whitespace and comment removal via `memmove`) and a custom tokenizer using an anchor/scout two-pointer strategy with a small static vocabulary table.
 
-**Hash table** — djb2 hash table (size 31, chaining) over a static `CommandEntry` ground truth table covering all 17 chapter 7 VM commands plus the 6 chapter 8 additions. The hash table holds typed `CommandNode` pointers into the static table — one source of truth, the hash table purely an acceleration structure.
+**Hash table** — djb2 hash table (size 31, chaining) over a static `CommandEntry` ground truth table covering all 17 chapter 7 VM commands plus the 6 chapter 8 additions. The hash table holds type, operation, and code generation metadata for the translator.
 
-**`string_to_int`** — custom integer parser with overflow detection against Hack's 16-bit bounds using `HACK_INT_MAX` and `HACK_INT_MIN` macros, trailing character validation, and preserved input pointer for accurate error reporting.
+**`string_to_int`** — custom integer parser with overflow detection against Hack's 16-bit bounds using `HACK_INT_MAX` and `HACK_INT_MIN` macros, trailing character validation, and preserved input state. It rejects malformed numeric literals before they can corrupt generated assembly.
 
 ### Chapter 7 — Stack Arithmetic and Memory Access
 
@@ -76,8 +76,8 @@ Implements all arithmetic, logical, and memory access commands across all eight 
 
 - **Binary operations** — `add`, `sub`, `and`, `or` via parameterised `write_binary`, substituting only the ALU instruction string
 - **Unary operations** — `neg`, `not` via `write_unary`
-- **Comparison operations** — `eq`, `gt`, `lt` with unique label generation via caller-owned counter passed as `int*`, producing `FunctionName$ret.i` symbols that avoid collisions in the flat assembly namespace
-- **Memory segments** — `constant`, `static`, `local`, `argument`, `this`, `that`, `temp`, `pointer` — each with distinct address computation patterns. `static` uses `Filename.i` symbols resolved by the assembler. Base pointer segments use pointer dereferencing. Fixed base segments use direct address arithmetic.
+- **Comparison operations** — `eq`, `gt`, `lt` with unique label generation via caller-owned counter passed as `int*`, producing `FunctionName$ret.i` symbols that avoid collisions in the flat assembly output
+- **Memory segments** — `constant`, `static`, `local`, `argument`, `this`, `that`, `temp`, `pointer` — each with distinct address computation patterns. `static` uses `Filename.i` symbols resolved at translation time
 
 ### Chapter 8 — Function Calling Convention
 
@@ -107,11 +107,11 @@ Implements a complete runtime environment for function calls — the mechanism t
 - Return address symbols: `FunctionName$ret.i` (e.g. `Foo.bar$ret.0`)
 - Static variables: `Filename.i` (e.g. `Foo.3`)
 
-**Directory translation mode** — when passed a directory, the translator processes all `.vm` files into a single output assembly file, emitting bootstrap code (SP initialisation + `call Sys.init 0`) at the top. Each file's `base_name` is tracked independently for correct static segment label generation. A persistent counter across all files ensures globally unique return address labels.
+**Directory translation mode** — when passed a directory, the translator processes all `.vm` files into a single output assembly file, emitting bootstrap code (SP initialisation + `call Sys.init`) and preserving the correct function call structure across the entire program.
 
 ### Error Handling Philosophy
 
-Fail fast throughout. Unrecognised commands, malformed input, invalid segment indices, integer overflow, truncated lines — all caught at the earliest possible point with meaningful `stderr` messages including the offending token and line context. The translator either produces correct assembly or terminates with a clear explanation. It never silently continues past structural errors.
+Fail fast throughout. Unrecognised commands, malformed input, invalid segment indices, integer overflow, truncated lines — all caught at the earliest possible point with meaningful `stderr` messages and non-zero exit codes.
 
 ### Code Review
 
@@ -124,7 +124,7 @@ Both chapters reviewed by CodeRabbit on submission:
 
 ## Jack Compiler — Chapters 10 and 11 (C Implementation)
 
-A complete compiler for the Jack language, implemented in C across two chapters. Chapter 10 built the front end — lexical analysis and parsing. Chapter 11 added the back end — symbol resolution and VM code generation. The compiler drives two output streams simultaneously: an XML parse tree for structural verification and VM bytecode for execution.
+A complete compiler for the Jack language, implemented in C across two chapters. Chapter 10 built the front end — lexical analysis and parsing. Chapter 11 added the back end — symbol resolution and code generation.
 
 ### Pipeline
 
@@ -132,37 +132,37 @@ A complete compiler for the Jack language, implemented in C across two chapters.
 .jack source → tokenizer → token stream → parser → parse tree + VM code
 ```
 
-The tokenizer and parser are strictly separated. The tokenizer's only job is to produce a flat, typed token stream from source text. The parser's only job is to impose grammatical structure on that stream and drive code generation. Neither stage reaches into the other's domain.
+The tokenizer and parser are strictly separated. The tokenizer's only job is to produce a flat, typed token stream from source text. The parser's only job is to impose grammatical structure on that stream and emit VM instructions as it walks the parse tree.
 
 ### Tokenizer
 
-The tokenizer consumes a Jack source file and produces a flat array of typed tokens, each represented as a slice into the original source buffer — a pointer and length with no allocation or copy overhead. Printing uses `%.*s` throughout; the source buffer is never null-terminated mid-stream.
+The tokenizer consumes a Jack source file and produces a flat array of typed tokens, each represented as a slice into the original source buffer — a pointer and length with no allocation or copy for each token.
 
-**Character classification** is handled by a dispatch table indexed on the first character of each token, collapsing the branching that would otherwise dominate the recognition loop into a single indirect call per token.
+**Character classification** is handled by a dispatch table indexed on the first character of each token, collapsing the branching that would otherwise dominate the recognition loop into a single, cache-friendly decision tree.
 
-**Keyword discrimination** happens at the identifier boundary: candidates that pass the identifier character test are submitted to a `bsearch` against a sorted keywords array. Identifiers that match become keyword tokens; everything else remains an identifier. This keeps the recognition path uniform and avoids special-casing keywords during character-level scanning.
+**Keyword discrimination** happens at the identifier boundary: candidates that pass the identifier character test are submitted to a `bsearch` against a sorted keywords array. Identifiers that match keywords are promoted to their keyword token type; otherwise they remain identifiers.
 
-**Token storage** uses a flat array of structs with dynamic doubling reallocation — no pool allocator, no array of heap pointers. The layout is cache-friendly and the growth strategy is the standard amortised O(1) append.
+**Token storage** uses a flat array of structs with dynamic doubling reallocation — no pool allocator, no array of heap pointers. The layout is cache-friendly and the growth strategy is the standard geometric expansion that keeps the scan loop fast and predictable.
 
-**The two-pointer anchor/scout idiom** drives the main scan loop, with the anchor always positioned at the first character of the next token and the scout advancing to find its boundary. Preconditions are maintained explicitly at each transition so the loop body reasons only about what it sees, not about what might have been left behind.
+**The two-pointer anchor/scout idiom** drives the main scan loop, with the anchor always positioned at the first character of the next token and the scout advancing to find its boundary. Precondition checks minimise the cost of moving across whitespace and symbols while preserving correctness.
 
 ### Parser
 
-A hand-written recursive descent parser structured directly from the Jack grammar. Each non-terminal in the grammar maps to a function; each function consumes exactly the tokens its production covers and returns, leaving the stream positioned at the first token of whatever follows.
+A hand-written recursive descent parser structured directly from the Jack grammar. Each non-terminal in the grammar maps to a function; each function consumes exactly the tokens its production requires and returns the VM code it generates.
 
-**Error handling** follows the same fail-fast discipline as the rest of the pipeline. A token that does not match the expected terminal exits immediately with the offending token, its position, and what was expected. The parser never attempts recovery or continuation past a structural mismatch.
+**Error handling** follows the same fail-fast discipline as the rest of the pipeline. A token that does not match the expected terminal exits immediately with the offending token, its position, and a clear diagnostic to help localize the grammar error.
 
 ### Symbol Table
 
-Two-scope flat array model: `ClassTable` (field/static) and `SubTable` (argument/local), each a fixed array of entry structs with slice-based name and type fields — pointer and length into the source buffer, consistent with the tokenizer's representation throughout. Separate per-kind counters assign VM segment indices at insertion time.
+Two-scope flat array model: `ClassTable` (field/static) and `SubTable` (argument/local), each a fixed array of entry structs with slice-based name and type fields — pointer and length into the original source buffer for names, and a compact kind/type encoding for variables.
 
-Both lookup functions iterate from the most recently inserted entry backwards — variables declared closest to the point of use are found first on average, reducing comparisons in the common case. Lookup is subroutine-scope-first, falling through to class scope on a miss. A NULL return at a subroutine call site indicates a class name rather than a variable reference.
+Both lookup functions iterate from the most recently inserted entry backwards — variables declared closest to the point of use are found first on average, reducing comparisons in the common case without introducing a heavier hash table for a language whose symbol tables stay small and local.
 
-Linear search over the flat array is deliberate — Jack's scope sizes make hashing unnecessary overhead. A subroutine symbol table large enough to require hashing would indicate a poorly structured subroutine.
+Linear search over the flat array is deliberate — Jack's scope sizes make hashing unnecessary overhead. A subroutine symbol table large enough to require hashing would indicate a poorly structured program rather than a true need for a more complex data structure.
 
 ### Code Generation
 
-**Subroutine kind handling** — the subroutine kind (constructor/method/function) is captured into `ParserState` before parsing the keyword. The `function` declaration is deferred until all `varDec` parsing completes so that `local_count` is final. The preamble then diverges by kind:
+**Subroutine kind handling** — the subroutine kind (constructor/method/function) is captured into `ParserState` before parsing the keyword. The `function` declaration is deferred until all `var` declarations have been processed, then emitted in the correct position in the class output.
 
 - Constructor: `push field_count`, `call Memory.alloc 1`, `pop pointer 0`
 - Method: `push argument 0`, `pop pointer 0`
@@ -170,21 +170,23 @@ Linear search over the flat array is deliberate — Jack's scope sizes make hash
 
 For methods, a hidden `this` entry is inserted into the subroutine table before parameter parsing so explicit parameters receive correct indices from 1.
 
-**Expression code generation** — `compileExpression` holds the binary operator in a temporary after consuming it, compiles the right-hand term, then emits the operator. Postfix ordering falls out of the recursive call structure without any explicit reordering.
+**Expression code generation** — `compileExpression` holds the binary operator in a temporary after consuming it, compiles the right-hand term, then emits the operator. Postfix ordering falls out naturally from the recursive descent structure and the generated VM stack discipline.
 
-**`compileTerm`** handles all term forms: integer and string constants, keyword constants (`null`/`false` → `push constant 0`; `true` → `push constant 0` / `not`; `this` → `push pointer 0`), plain variable lookup, array access, subroutine calls in all three forms, unary operators, and parenthesised expressions. Every branch either emits correct VM code or terminates with a diagnostic — no silent fallthrough.
+**`compileTerm`** handles all term forms: integer and string constants, keyword constants (`null`/`false` → `push constant 0`; `true` → `push constant 0` / `not`; `this` → `push pointer 0`), unary operators, array indexing, subroutine calls, and parenthesized expressions.
 
 **Array assignment** uses a temp register to preserve the RHS value across the `pointer 1` assignment: push base address, compile index, `add`, compile RHS, `pop temp 0`, `pop pointer 1`, `push temp 0`, `pop that 0`.
 
-**Label generation** — `compileIf` and `compileWhile` each reserve two indices from a persistent `label_count` in `ParserState` at function entry, before any recursive `compileStatements` call. Both labels are allocated upfront so nested constructs consume indices beyond them, eliminating collisions under arbitrary nesting depth.
+**Label generation** — `compileIf` and `compileWhile` each reserve two indices from a persistent `label_count` in `ParserState` at function entry, before any recursive `compileStatements` call. This keeps all generated labels in the same namespace and avoids label collisions when nested control flow appears.
 
-**Void return** — `compileReturn` pushes `constant 0` before emitting `return` when the next token is `;`. `compileDo` pops the discarded return value into `temp 0` after every subroutine call to keep the stack balanced.
+**Void return** — `compileReturn` pushes `constant 0` before emitting `return` when the next token is `;`. `compileDo` pops the discarded return value into `temp 0` after every subroutine call to maintain the stack discipline required by the VM.
 
 **`emit_push` / `emit_pop`** centralise the kind-to-segment mapping: `T_STATIC` → `static`, `T_FIELD` → `this`, `T_ARG` → `argument`, `T_VAR` → `local`.
 
 ### Tests Passing
 
 Single-file: Average, Seven, ConvertToBin, ComplexArrays. Multi-file: Pong — verified in the VM emulator with directory load.
+
+![Pong running](./pong-running.svg)
 
 ### Code Review
 
