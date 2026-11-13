@@ -218,15 +218,9 @@ nand2tetris/
     └── chapter_11/     — Jack Compiler Back-End (C)
 ```
 
-Each implementation directory contains its own README with implementation notes, design decisions, and test results.
-
----
-
 ## References
 
 - Nisan & Schocken — *The Elements of Computing Systems* (Nand2Tetris)
 - Bryant & O'Hallaron — *Computer Systems: A Programmer's Perspective* (CS:APP)
 - Kernighan & Ritchie — *The C Programming Language* (K&R 2nd edition)
 - Petzold — *Code: The Hidden Language of Computer Hardware and Software*
-- Bentley — *Programming Pearls*
-- Skiena — *The Algorithm Design Manual*
