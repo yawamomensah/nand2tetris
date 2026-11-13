@@ -1,12 +1,10 @@
-# Nand2Tetris — Building a Computing Platform from First Principles
+# Computing Platform — From Hardware to Compiler
 
 [![Native Nand2Tetris Tests](https://github.com/yawamomensah/nand2tetris/actions/workflows/jack-tests.yml/badge.svg)](https://github.com/yawamomensah/nand2tetris/actions/workflows/jack-tests.yml)
 
-A complete implementation of the Nand2Tetris curriculum in C and HDL, built to answer a specific question: **how does a computing platform actually come into being?**
+A computing platform implemented from the ground up in HDL and C, spanning digital logic, computer architecture, an assembler, a VM translator, and a Jack compiler.
 
-Every layer of this project was implemented by hand — from boolean logic gates through to a working compiler for a high-level object-oriented language. No shortcuts, no standard library substitutions, no external code generation. The result is a complete stack that begins with NAND gates and ends with a compiled program running in a simulated Hack environment.
-
----
+I chose the Nand2Tetris curriculum as the project framework because its supplied test suites and tools provide third-party, objective verification of my implementations. The curriculum supplies the sequence, fixtures, and reference tools; the focus here is on the implementations and how their layers work together.
 
 ## What Was Built
 
@@ -23,7 +21,18 @@ Every layer of this project was implemented by hand — from boolean logic gates
 | Jack Parser | Recursive descent parser with XML parse tree output | C |
 | Jack Compiler | Full code generation — Jack source to VM bytecode | C |
 
-The native CI workflow uses the supplied course fixtures where available. It compares Project 10 tokenizer/parser output and executes Project 11's official `Seven` program in the VM Emulator with the native Nand2Tetris tools.
+## Automated Tests & Toolchain Verification
+
+GitHub Actions runs the native test workflow on pushes, pull requests, and manual dispatches. The workflow installs the official Nand2Tetris tools, verifies the downloaded archive with a SHA-256 checksum, fetches the official course fixtures at a pinned revision, builds the C programs, and runs these checks:
+
+- **Assembler and VM translators:** The assembler translates `Mult.asm`, which is run in the CPU Emulator and checked against the expected result. The VM translators are tested on stack arithmetic, memory access, program flow, and function-call fixtures, including multi-file directory translation. Generated assembly is executed in the CPU Emulator and compared with expected results.
+- **HDL hardware:** HDL implementations are tested in the Hardware Simulator against the supplied test scripts and comparison files for the logic and arithmetic hardware.
+- **Jack tokenizer and parser:** Tokenizer and parser outputs for the parser fixtures are compared with the supplied expected XML files.
+- **Jack compiler:** The compiler is built and run on the sample programs `Average`, `ComplexArrays`, `ConvertToBin`, `Pong`, `Seven`, and `Square`. These are compile checks; the workflow does not claim to have dedicated expected-output test files for every compiler program. It additionally runs compiled `Seven` in the VM Emulator with the course OS and checks its output.
+
+The screenshot below is separate end-to-end evidence: Pong is running in the Hack emulator, demonstrating the compiler, VM translator, assembler, CPU, and screen output working together.
+
+![Pong running in the Hack emulator](./Pong.PNG)
 
 ---
 
@@ -52,7 +61,7 @@ A two-pass assembler that translates Hack assembly into binary machine code.
 
 ## VM Translator — C Implementation
 
-A complete two-tier VM translator covering the full Hack VM specification across chapters 7 and 8. Translates stack-based VM bytecode into Hack assembly, implementing the virtual machine's execution model from the ground up.
+A complete VM translator covering the Hack VM specification. It translates stack-based bytecode into Hack assembly and implements the virtual machine's execution model from the ground up, including arithmetic, memory access, branching, and function calls.
 
 ### Pipeline Architecture
 
@@ -60,26 +69,26 @@ A complete two-tier VM translator covering the full Hack VM specification across
 raw line → strip → tokenize → lookup → dispatch → codewriter → .asm output
 ```
 
-Each stage has a single responsibility and a clean contract with the next. The pipeline requires zero structural modification between chapter 7 and chapter 8 — new commands are added to the lookup table and code writer without disturbing the surrounding architecture.
+Each stage has a single responsibility and a clean contract with the next. New VM commands are added to the lookup table and code writer without disturbing the surrounding architecture.
 
 ### Custom Infrastructure
 
 **String library** — hand-written string utilities including `strip` (in-place whitespace and comment removal via `memmove`) and a custom tokenizer using an anchor/scout two-pointer strategy with a small static vocabulary table.
 
-**Hash table** — djb2 hash table (size 31, chaining) over a static `CommandEntry` ground truth table covering all 17 chapter 7 VM commands plus the 6 chapter 8 additions. The hash table holds type, operation, and code generation metadata for the translator.
+**Hash table** — djb2 hash table (size 31, chaining) over a static `CommandEntry` ground truth table covering the VM command set. The hash table holds type, operation, and code generation metadata for the translator.
 
 **`string_to_int`** — custom integer parser with overflow detection against Hack's 16-bit bounds using `HACK_INT_MAX` and `HACK_INT_MIN` macros, trailing character validation, and preserved input state. It rejects malformed numeric literals before they can corrupt generated assembly.
 
-### Chapter 7 — Stack Arithmetic and Memory Access
+### Arithmetic, Logic, and Memory Access
 
-Implements all arithmetic, logical, and memory access commands across all eight virtual memory segments:
+Implements arithmetic, logical, comparison, and memory access commands across all eight virtual memory segments:
 
 - **Binary operations** — `add`, `sub`, `and`, `or` via parameterised `write_binary`, substituting only the ALU instruction string
 - **Unary operations** — `neg`, `not` via `write_unary`
 - **Comparison operations** — `eq`, `gt`, `lt` with unique label generation via caller-owned counter passed as `int*`, producing `FunctionName$ret.i` symbols that avoid collisions in the flat assembly output
 - **Memory segments** — `constant`, `static`, `local`, `argument`, `this`, `that`, `temp`, `pointer` — each with distinct address computation patterns. `static` uses `Filename.i` symbols resolved at translation time
 
-### Chapter 8 — Function Calling Convention
+### Functions and Calling Convention
 
 Implements a complete runtime environment for function calls — the mechanism that makes arbitrarily nested function execution possible on a flat stack machine.
 
@@ -101,7 +110,7 @@ Implements a complete runtime environment for function calls — the mechanism t
 5. Restore THAT, THIS, ARG, LCL from frame offsets in reverse order — LCL last since all offsets are computed relative to it
 6. Jump via R14 to saved return address
 
-**Symbol generation** follows the VM spec naming convention:
+**Symbol generation** follows the VM specification naming convention:
 - Function entry points: `FunctionName` (e.g. `Foo.bar`)
 - Branching labels: `FunctionName$label` (e.g. `Foo.bar$LOOP`)
 - Return address symbols: `FunctionName$ret.i` (e.g. `Foo.bar$ret.0`)
@@ -115,16 +124,16 @@ Fail fast throughout. Unrecognised commands, malformed input, invalid segment in
 
 ### Code Review
 
-Both chapters reviewed by CodeRabbit on submission:
-- **Complexity rating: 4 (Complex)** — consistent across both chapters
-- Estimated review effort: ~50 minutes per chapter
+Both VM translator implementations were reviewed by CodeRabbit:
+- **Complexity rating: 4 (Complex)**
+- Estimated review effort: ~50 minutes per implementation
 - Issues found: targeted mechanical findings, no architectural concerns raised
 
 ---
 
-## Jack Compiler — Chapters 10 and 11 (C Implementation)
+## Jack Compiler — C Implementation
 
-A complete compiler for the Jack language, implemented in C across two chapters. Chapter 10 built the front end — lexical analysis and parsing. Chapter 11 added the back end — symbol resolution and code generation.
+A complete compiler for the Jack language, implemented in C. It includes a front end for lexical analysis and parsing, plus symbol resolution and code generation.
 
 ### Pipeline
 
@@ -182,17 +191,11 @@ For methods, a hidden `this` entry is inserted into the subroutine table before 
 
 **`emit_push` / `emit_pop`** centralise the kind-to-segment mapping: `T_STATIC` → `static`, `T_FIELD` → `this`, `T_ARG` → `argument`, `T_VAR` → `local`.
 
-### Tests Passing
-
-Single-file: Average, Seven, ConvertToBin, ComplexArrays. Multi-file: Pong — verified in the VM emulator with directory load. The screenshot below shows the compiled Pong game running in the emulator, demonstrating that the compiler, VM translator, assembler, CPU, and screen output work together as a toolchain.
-
-![Pong running in the Hack emulator](./Pong.PNG)
-
 ### Code Review
 
-Chapters 10 and 11 reviewed by CodeRabbit on submission:
-- **Complexity rating: 4 (Complex)** — consistent across both chapters
-- Estimated review effort: ~50 minutes per chapter
+The compiler implementation was reviewed by CodeRabbit:
+- **Complexity rating: 4 (Complex)**
+- Estimated review effort: ~50 minutes
 - Issues found: targeted mechanical findings, no architectural concerns raised
 
 ---
@@ -215,7 +218,7 @@ nand2tetris/
     └── chapter_11/     — Jack Compiler Back-End (C)
 ```
 
-Each chapter directory contains its own README with implementation notes, design decisions, and test results.
+Each implementation directory contains its own README with implementation notes, design decisions, and test results.
 
 ---
 
